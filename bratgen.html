@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brat Generator - Perfect Center, White, Justify</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #000;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .generator-container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-width: 460px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .canvas-preview-wrapper {
+            width: 400px;
+            height: 400px;
+            margin: 0 auto 20px auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background: #fff;
+            overflow: hidden;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            resize: none;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #000;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            accent-color: #000;
+        }
+
+        button {
+            background-color: #000;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>brat generator.</h1>
+
+    <div class="generator-container">
+        <div class="canvas-preview-wrapper">
+            <canvas id="bratCanvas" width="800" height="800"></canvas>
+        </div>
+
+        <textarea id="text-input" placeholder="Ketik text di sini...">Hujan melebat, petir menyambar, kalau gak chat seharian, rasanya langsung ambyar</textarea>
+        
+        <div class="control-group">
+            <label>Tingkat Blur: <span id="blur-val">1.8px</span></label>
+            <input type="range" id="blur-slider" min="0" max="10" step="0.5" value="3.5">
+        </div>
+
+        <div class="control-group">
+            <label>Tingkat Burik (Pixelate): <span id="pixel-val">Level 7</span></label>
+            <input type="range" id="pixel-slider" min="1" max="15" step="1" value="7">
+        </div>
+
+        <div class="control-group">
+            <label>Ukuran Font: <span id="size-val">52px</span></label>
+            <input type="range" id="size-slider" min="20" max="120" step="1" value="52">
+        </div>
+
+        <button id="download-btn">Download PNG</button>
+    </div>
+
+    <canvas id="offscreenCanvas" style="display:none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById('bratCanvas');
+        const ctx = canvas.getContext('2d');
+        const offscreenCanvas = document.getElementById('offscreenCanvas');
+        const offCtx = offscreenCanvas.getContext('2d');
+
+        const textInput = document.getElementById('text-input');
+        const blurSlider = document.getElementById('blur-slider');
+        const blurVal = document.getElementById('blur-val');
+        const pixelSlider = document.getElementById('pixel-slider');
+        const pixelVal = document.getElementById('pixel-val');
+        const sizeSlider = document.getElementById('size-slider');
+        const sizeVal = document.getElementById('size-val');
+        const downloadBtn = document.getElementById('download-btn');
+
+        // Fungsi pintar untuk memotong teks menjadi baris-baris sesuai lebar maksimal
+        function getLines(context, text, maxWidth, fontSize) {
+            context.font = `normal ${fontSize}px "Arial Narrow", "Arial Condensed", "Impact", sans-serif`;
+            
+            // Mengikuti gaya brat: otomatis diubah ke huruf kecil semua (lowercase)
+            let words = text.toLowerCase().split(' ');
+            let lines = [];
+            let currentLine = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                let word = words[i];
+                let width = context.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) {
+                    currentLine += " " + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        }
+
+        // Fungsi khusus menggambar Justified Text agar otomatis Center secara vertikal
+        function drawJustifiedText(context, lines, x, startY, maxWidth, lineHeight) {
+            context.fillStyle = '#000000';
+            context.textBaseline = 'top';
+
+            for (let i = 0; i < lines.length; i++) {
+                let lineWords = lines[i].split(' ');
+                let totalWordsWidth = 0;
+                
+                for (let j = 0; j < lineWords.length; j++) {
+                    totalWordsWidth += context.measureText(lineWords[j]).width;
+                }
+
+                let totalSpaces = lineWords.length - 1;
+                let spaceWidth = (maxWidth - totalWordsWidth) / totalSpaces;
+
+                // Jika baris terakhir atau hanya ada 1 kata, matikan justify paksa (rata kiri biasa) agar tidak renggang jelek
+                if (i === lines.length - 1 || totalSpaces <= 0) {
+                    context.fillText(lines[i], x, startY + (i * lineHeight));
+                    continue;
+                }
+
+                // Proses perataan kanan-kiri (Justify)
+                let wordX = x;
+                for (let j = 0; j < lineWords.length; j++) {
+                    context.fillText(lineWords[j], wordX, startY + (i * lineHeight));
+                    wordX += context.measureText(lineWords[j]).width + spaceWidth;
+                }
+            }
+        }
+
+        // Fungsi render utama
+        function render() {
+            const text = textInput.value;
+            const blur = parseFloat(blurSlider.value);
+            const pixelLevel = parseInt(pixelSlider.value);
+            const fontSize = parseInt(sizeSlider.value);
+
+            blurVal.innerText = (blur/2).toFixed(1) + 'px';
+            pixelVal.innerText = pixelLevel === 1 ? 'Normal' : `Level ${pixelLevel}`;
+            sizeVal.innerText = fontSize + 'px';
+
+            const baseSize = 800; // Ukuran resolusi asli gambar cetak
+            
+            // Konfigurasi resolusi rendah untuk efek burik pixelate
+            const lowResSize = Math.max(50, Math.round(baseSize / pixelLevel));
+            offscreenCanvas.width = lowResSize;
+            offscreenCanvas.height = lowResSize;
+
+            offCtx.fillStyle = '#ffffff';
+            offCtx.fillRect(0, 0, lowResSize, lowResSize);
+
+            const scaleFactor = lowResSize / baseSize;
+            offCtx.save();
+            offCtx.scale(scaleFactor, scaleFactor);
+
+            if (blur > 0) {
+                offCtx.filter = `blur(${blur}px) contrast(150%)`;
+            } else {
+                offCtx.filter = 'none';
+            }
+
+            // Hitung kalkulasi layouting teks
+            const padding = 80;
+            const maxWidth = baseSize - (padding * 2);
+            const lineHeight = fontSize * 0.95; // Jarak baris rapat ala Brat
+
+            // 1. Dapatkan baris teks terlebih dahulu
+            const lines = getLines(offCtx, text, maxWidth, fontSize);
+            
+            // 2. Hitung total tinggi teks keseluruhan baris
+            const totalTextHeight = lines.length * lineHeight;
+            
+            // 3. Cari titik Start Y agar teks benar-benar berada di tengah (Center Vertikal)
+            const startY = (baseSize - totalTextHeight) / 2;
+
+            // Gambar teksnya ke canvas bayangan
+            drawJustifiedText(offCtx, lines, padding, startY, maxWidth, lineHeight);
+            offCtx.restore();
+
+            // 4. Proyeksikan ke canvas utama agar pixel-nya pecah kotak-kotak sempurna
+            ctx.clearRect(0, 0, baseSize, baseSize);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(offscreenCanvas, 0, 0, lowResSize, lowResSize, 0, 0, baseSize, baseSize);
+        }
+
+        // Listener update real-time
+        textInput.addEventListener('input', render);
+        blurSlider.addEventListener('input', render);
+        pixelSlider.addEventListener('input', render);
+        sizeSlider.addEventListener('input', render);
+
+        // Download PNG
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'brat-centered-style.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        // Jalankan saat pertama kali dibuka
+        window.onload = render;
+    </script>
+</body>
+</html>
