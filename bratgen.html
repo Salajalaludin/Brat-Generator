@@ -121,8 +121,8 @@
         </div>
 
         <div class="control-group">
-            <label>Tingkat Burik (Pixelate): <span id="pixel-val">Level 7</span></label>
-            <input type="range" id="pixel-slider" min="1" max="15" step="1" value="7">
+            <label>Tingkat Burik (Pixelate): <span id="pixel-val">Level 0</span></label>
+            <input type="range" id="pixel-slider" min="0" max="15" step="1" value="0">
         </div>
 
         <div class="control-group">
@@ -212,13 +212,13 @@
             const fontSize = parseInt(sizeSlider.value);
 
             blurVal.innerText = (blur/2).toFixed(1) + 'px';
-            pixelVal.innerText = pixelLevel === 1 ? 'Normal' : `Level ${pixelLevel}`;
+            pixelVal.innerText = `Level ${pixelLevel}`;
             sizeVal.innerText = fontSize + 'px';
 
             const baseSize = 800; // Ukuran resolusi asli gambar cetak
             
             // Konfigurasi resolusi rendah untuk efek burik pixelate
-            const lowResSize = Math.max(50, Math.round(baseSize / pixelLevel));
+            const lowResSize = pixelLevel === 0 ? baseSize : Math.max(50, Math.round(baseSize / pixelLevel));
             offscreenCanvas.width = lowResSize;
             offscreenCanvas.height = lowResSize;
 
